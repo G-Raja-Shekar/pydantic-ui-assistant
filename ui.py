@@ -5,6 +5,37 @@ app, rt = fast_app()
 # Store messages in memory
 messages = []
 
+# Available products
+products = [
+    {"name": "Salt", "price": 2.50, "emoji": "🧂"},
+    {"name": "Pepper", "price": 3.00, "emoji": "🌶️"},
+    {"name": "Toothpaste", "price": 4.99, "emoji": "🦷"},
+    {"name": "Toothbrush", "price": 3.50, "emoji": "🪥"},
+    {"name": "Detergent", "price": 8.99, "emoji": "🧴"},
+    {"name": "Soap", "price": 2.99, "emoji": "🧼"},
+    {"name": "Shampoo", "price": 6.99, "emoji": "🧴"},
+    {"name": "Paper Towels", "price": 5.49, "emoji": "🧻"},
+]
+
+def ProductCard(name, price, emoji):
+    """Create a product card"""
+    return Div(
+        Div(emoji, style="font-size: 40px; margin-bottom: 10px;"),
+        Div(name, style="font-weight: bold; font-size: 16px; margin-bottom: 5px;"),
+        Div(f"${price:.2f}", style="color: #667eea; font-size: 14px;"),
+        style="""
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            cursor: pointer;
+        """,
+        onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'",
+        onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'"
+    )
+
 def ChatMessage(text, is_user=False):
     """Create a chat bubble"""
     alignment = "flex-end" if is_user else "flex-start"
@@ -32,7 +63,7 @@ def get():
     """Main chat page"""
     return Html(
         Head(
-            Title("Chat Bot"),
+            Title("E-Commerce Assistant"),
             Style("""
                 * {
                     margin: 0;
@@ -47,11 +78,42 @@ def get():
                     display: flex;
                     justify-content: center;
                     align-items: center;
+                    padding: 20px;
+                }
+                
+                .main-container {
+                    display: flex;
+                    gap: 20px;
+                    width: 100%;
+                    max-width: 1200px;
+                    height: 90vh;
+                }
+                
+                .products-sidebar {
+                    flex: 0 0 350px;
+                    background: rgba(255, 255, 255, 0.95);
+                    border-radius: 10px;
+                    padding: 20px;
+                    overflow-y: auto;
+                    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+                }
+                
+                .products-header {
+                    font-size: 24px;
+                    font-weight: bold;
+                    color: #667eea;
+                    margin-bottom: 20px;
+                    text-align: center;
+                }
+                
+                .products-grid {
+                    display: grid;
+                    grid-template-columns: 1fr;
+                    gap: 15px;
                 }
                 
                 .chat-container {
-                    width: 400px;
-                    height: 600px;
+                    flex: 1;
                     background: white;
                     border-radius: 10px;
                     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
@@ -144,31 +206,44 @@ def get():
         ),
         Body(
             Div(
-                Div("Chat Bot", cls="chat-header"),
+                # Left sidebar with products
                 Div(
-                    ChatMessage("Hello! How can I help you today?", is_user=False),
-                    id="chat-messages",
-                    cls="chat-messages",
-                    hx_get="/messages",
-                    hx_trigger="load",
-                    hx_swap="innerHTML"
-                ),
-                Form(
-                    Input(
-                        type="text",
-                        name="message",
-                        placeholder="Type your message...",
-                        autocomplete="off",
-                        id="message-input"
+                    Div("Available Products", cls="products-header"),
+                    Div(
+                        *[ProductCard(p["name"], p["price"], p["emoji"]) for p in products],
+                        cls="products-grid"
                     ),
-                    Button("Send", type="submit"),
-                    hx_post="/send",
-                    hx_target="#chat-messages",
-                    hx_swap="innerHTML",
-                    hx_on__after_request="document.getElementById('message-input').value = ''",
-                    cls="chat-input"
+                    cls="products-sidebar"
                 ),
-                cls="chat-container"
+                # Right chat container
+                Div(
+                    Div("E-Commerce Assistant", cls="chat-header"),
+                    Div(
+                        ChatMessage("Hello! How can I help you shop today?", is_user=False),
+                        id="chat-messages",
+                        cls="chat-messages",
+                        hx_get="/messages",
+                        hx_trigger="load",
+                        hx_swap="innerHTML"
+                    ),
+                    Form(
+                        Input(
+                            type="text",
+                            name="message",
+                            placeholder="Ask about products...",
+                            autocomplete="off",
+                            id="message-input"
+                        ),
+                        Button("Send", type="submit"),
+                        hx_post="/send",
+                        hx_target="#chat-messages",
+                        hx_swap="innerHTML",
+                        hx_on__after_request="document.getElementById('message-input').value = ''",
+                        cls="chat-input"
+                    ),
+                    cls="chat-container"
+                ),
+                cls="main-container"
             ),
             Script(src="https://unpkg.com/htmx.org@1.9.10")
         )
@@ -177,7 +252,7 @@ def get():
 @rt("/messages")
 def get():
     """Get all messages"""
-    result = [ChatMessage("Hello! How can I help you today?", is_user=False)]
+    result = [ChatMessage("Hello! How can I help you shop today?", is_user=False)]
     for msg in messages:
         result.append(ChatMessage(msg['text'], is_user=msg['is_user']))
     return result
@@ -192,7 +267,7 @@ def post(message: str):
         messages.append({"text": message, "is_user": False})
     
     # Return all messages
-    result = [ChatMessage("Hello! How can I help you today?", is_user=False)]
+    result = [ChatMessage("Hello! How can I help you shop today?", is_user=False)]
     for msg in messages:
         result.append(ChatMessage(msg['text'], is_user=msg['is_user']))
     return result
