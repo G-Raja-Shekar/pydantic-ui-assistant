@@ -306,8 +306,8 @@ def get():
                         Button("Send", type="submit"),
                         hx_post="/send",
                         hx_target="#chat-messages",
-                        hx_swap="innerHTML",
-                        hx_on__after_request="document.getElementById('message-input').value = ''",
+                        hx_swap="beforeend",
+                        hx_on="htmx:configRequest: const input = document.getElementById('message-input'); if(input.value.trim()) { document.getElementById('chat-messages').insertAdjacentHTML('beforeend', `<div style=\"max-width: 70%; padding: 12px 16px; border-radius: 18px 18px 4px 18px; background: #667eea; color: white; word-wrap: break-word; align-self: flex-end; margin-bottom: 10px; animation: fadeIn 0.3s;\">${input.value}</div>`); input.value = ''; }",
                         cls="chat-input"
                     ),
                     cls="chat-container"
@@ -386,10 +386,8 @@ async def post(message: str):
                 bot_response = f"Sorry, I encountered an error: {str(e)}"
                 messages.append({"text": bot_response, "is_user": False})
     
-    # Return messages and cart update
-    result = [ChatMessage("Hello! How can I help you shop today?", is_user=False)]
-    for msg in messages:
-        result.append(ChatMessage(msg['text'], is_user=msg['is_user']))
+    # Return only bot response and cart update
+    result = [ChatMessage(bot_response, is_user=False)]
     
     # Add OOB cart update
     cart_div = Div(*get_cart_items(), id="cart-items", **{"hx-swap-oob": "innerHTML"})
