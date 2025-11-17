@@ -5,6 +5,9 @@ app, rt = fast_app()
 # Store messages in memory
 messages = []
 
+# Shopping cart - stores {product_name: quantity}
+cart = {}
+
 # Available products
 products = [
     {"name": "Salt", "price": 2.50, "emoji": "🧂"},
@@ -34,6 +37,43 @@ def ProductCard(name, price, emoji):
         """,
         onmouseover="this.style.transform='translateY(-5px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'",
         onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'"
+    )
+
+def CartItem(name, price, emoji, quantity):
+    """Create a cart item card with quantity controls"""
+    return Div(
+        Div(
+            Div(emoji, style="font-size: 30px;"),
+            Div(
+                Div(name, style="font-weight: bold; font-size: 14px;"),
+                Div(f"${price:.2f}", style="color: #667eea; font-size: 12px;"),
+                style="flex: 1; text-align: left; margin-left: 10px;"
+            ),
+            style="display: flex; align-items: center; margin-bottom: 10px;"
+        ),
+        Div(
+            Button("-", 
+                hx_post=f"/cart/decrease/{name}",
+                hx_target="#cart-items",
+                hx_swap="innerHTML",
+                style="padding: 5px 10px; background: #f0f0f0; border: none; border-radius: 5px; cursor: pointer;"
+            ),
+            Span(str(quantity), style="margin: 0 10px; font-weight: bold;"),
+            Button("+",
+                hx_post=f"/cart/increase/{name}",
+                hx_target="#cart-items",
+                hx_swap="innerHTML",
+                style="padding: 5px 10px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;"
+            ),
+            style="display: flex; align-items: center; justify-content: center;"
+        ),
+        style="""
+            background: white;
+            border-radius: 10px;
+            padding: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 10px;
+        """
     )
 
 def ChatMessage(text, is_user=False):
@@ -85,7 +125,7 @@ def get():
                     display: flex;
                     gap: 20px;
                     width: 100%;
-                    max-width: 1200px;
+                    max-width: 1400px;
                     height: 90vh;
                 }
                 
@@ -110,6 +150,30 @@ def get():
                     display: grid;
                     grid-template-columns: 1fr;
                     gap: 15px;
+                }
+                
+                .cart-sidebar {
+                    flex: 0 0 300px;
+                    background: rgba(255, 255, 255, 0.95);
+                    border-radius: 10px;
+                    padding: 20px;
+                    overflow-y: auto;
+                    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+                }
+                
+                .cart-header {
+                    font-size: 24px;
+                    font-weight: bold;
+                    color: #667eea;
+                    margin-bottom: 20px;
+                    text-align: center;
+                }
+                
+                .cart-empty {
+                    text-align: center;
+                    color: #999;
+                    padding: 40px 20px;
+                    font-size: 14px;
                 }
                 
                 .chat-container {
@@ -215,7 +279,7 @@ def get():
                     ),
                     cls="products-sidebar"
                 ),
-                # Right chat container
+                # Middle chat container
                 Div(
                     Div("E-Commerce Assistant", cls="chat-header"),
                     Div(
@@ -243,6 +307,15 @@ def get():
                     ),
                     cls="chat-container"
                 ),
+                # Right cart sidebar
+                Div(
+                    Div("Your Cart", cls="cart-header"),
+                    Div(
+                        Div("Cart is empty", cls="cart-empty"),
+                        id="cart-items"
+                    ),
+                    cls="cart-sidebar"
+                ),
                 cls="main-container"
             ),
             Script(src="https://unpkg.com/htmx.org@1.9.10")
@@ -260,16 +333,60 @@ def get():
 @rt("/send")
 def post(message: str):
     """Handle message submission"""
+    bot_response = ""
     if message.strip():
-        # Add user message
         messages.append({"text": message, "is_user": True})
-        # Echo as bot response
-        messages.append({"text": message, "is_user": False})
+        
+        # Check if message is an add command
+        msg_lower = message.lower()
+        if "add" in msg_lower:
+            for product in products:
+                if product["name"].lower() in msg_lower:
+                    cart[product["name"]] = cart.get(product["name"], 0) + 1
+                    bot_response = f"Added {product['name']} to your cart!"
+                    break
+        
+        if not bot_response:
+            bot_response = "How can I help you?"
+        
+        messages.append({"text": bot_response, "is_user": False})
     
-    # Return all messages
+    # Return messages and cart update
     result = [ChatMessage("Hello! How can I help you shop today?", is_user=False)]
     for msg in messages:
         result.append(ChatMessage(msg['text'], is_user=msg['is_user']))
+    
+    # Add OOB cart update
+    cart_div = Div(*get_cart_items(), id="cart-items", hx_swap_oob="true")
+    result.append(cart_div)
+    
     return result
+
+@rt("/cart/increase/{name}")
+def post(name: str):
+    """Increase quantity of item in cart"""
+    cart[name] = cart.get(name, 0) + 1
+    return get_cart_items()
+
+@rt("/cart/decrease/{name}")
+def post(name: str):
+    """Decrease quantity of item in cart"""
+    if name in cart:
+        cart[name] -= 1
+        if cart[name] <= 0:
+            del cart[name]
+    return get_cart_items()
+
+def get_cart_items():
+    """Generate cart items HTML"""
+    if not cart:
+        return [Div("Cart is empty", cls="cart-empty")]
+    
+    items = []
+    for name, qty in cart.items():
+        product = next((p for p in products if p["name"] == name), None)
+        if product:
+            items.append(CartItem(name, product["price"], product["emoji"], qty))
+    return items
 
 serve()
