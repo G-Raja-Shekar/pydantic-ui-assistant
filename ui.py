@@ -356,6 +356,31 @@ async def post(message: str):
                 result = await run_agent_with_logging(message, agent_message_history)
                 bot_response = result.output
                 agent_message_history = result.all_messages()
+                
+                # Process tool calls for cart actions
+                import json
+                for msg in result.all_messages():
+                    if hasattr(msg, 'parts'):
+                        for part in msg.parts:
+                            if part.__class__.__name__ == 'ToolReturnPart':
+                                try:
+                                    cart_action = json.loads(part.content)
+                                    action = cart_action.get('action')
+                                    product_name = cart_action.get('product')
+                                    quantity = cart_action.get('quantity', 1)
+                                    
+                                    if action == 'add':
+                                        cart[product_name] = cart.get(product_name, 0) + quantity
+                                    elif action == 'remove':
+                                        cart.pop(product_name, None)
+                                    elif action == 'update':
+                                        if quantity > 0:
+                                            cart[product_name] = quantity
+                                        else:
+                                            cart.pop(product_name, None)
+                                except (json.JSONDecodeError, AttributeError, KeyError):
+                                    pass
+                
                 messages.append({"text": bot_response, "is_user": False})
             except Exception as e:
                 bot_response = f"Sorry, I encountered an error: {str(e)}"
@@ -367,7 +392,7 @@ async def post(message: str):
         result.append(ChatMessage(msg['text'], is_user=msg['is_user']))
     
     # Add OOB cart update
-    cart_div = Div(*get_cart_items(), id="cart-items", hx_swap_oob="true")
+    cart_div = Div(*get_cart_items(), id="cart-items", **{"hx-swap-oob": "innerHTML"})
     result.append(cart_div)
     
     return result
