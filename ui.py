@@ -1,9 +1,14 @@
 from fasthtml.common import *
+import asyncio
+from main import run_agent_with_logging
 
 app, rt = fast_app()
 
 # Store messages in memory
 messages = []
+
+# Store agent message history
+agent_message_history = []
 
 # Shopping cart - stores {product_name: quantity}
 cart = {}
@@ -331,25 +336,30 @@ def get():
     return result
 
 @rt("/send")
-def post(message: str):
+async def post(message: str):
     """Handle message submission"""
+    global agent_message_history
     bot_response = ""
+    
     if message.strip():
         messages.append({"text": message, "is_user": True})
         
-        # Check if message is an add command
-        msg_lower = message.lower()
-        if "add" in msg_lower:
-            for product in products:
-                if product["name"].lower() in msg_lower:
-                    cart[product["name"]] = cart.get(product["name"], 0) + 1
-                    bot_response = f"Added {product['name']} to your cart!"
-                    break
-        
-        if not bot_response:
-            bot_response = "How can I help you?"
-        
-        messages.append({"text": bot_response, "is_user": False})
+        # Check for clear command
+        if message.lower().strip() in ["clear", "clear chat", "reset"]:
+            messages.clear()
+            agent_message_history = []
+            bot_response = "Chat cleared! How can I help you?"
+            messages.append({"text": bot_response, "is_user": False})
+        else:
+            # Use Pydantic agent for response
+            try:
+                result = await run_agent_with_logging(message, agent_message_history)
+                bot_response = result.output
+                agent_message_history = result.all_messages()
+                messages.append({"text": bot_response, "is_user": False})
+            except Exception as e:
+                bot_response = f"Sorry, I encountered an error: {str(e)}"
+                messages.append({"text": bot_response, "is_user": False})
     
     # Return messages and cart update
     result = [ChatMessage("Hello! How can I help you shop today?", is_user=False)]
