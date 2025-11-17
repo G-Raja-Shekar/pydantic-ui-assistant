@@ -395,21 +395,6 @@ async def post(message: str):
     
     return result
 
-@rt("/cart/increase/{name}")
-def post(name: str):
-    """Increase quantity of item in cart"""
-    cart[name] = cart.get(name, 0) + 1
-    return get_cart_items()
-
-@rt("/cart/decrease/{name}")
-def post(name: str):
-    """Decrease quantity of item in cart"""
-    if name in cart:
-        cart[name] -= 1
-        if cart[name] <= 0:
-            del cart[name]
-    return get_cart_items()
-
 def get_cart_items():
     """Generate cart items HTML"""
     if not cart:
