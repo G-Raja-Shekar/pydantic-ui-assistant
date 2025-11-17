@@ -1,10 +1,8 @@
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent
 from dotenv import load_dotenv
 import logfire
 import os
 import asyncio
-import httpx
-from typing import Any
 
 load_dotenv()
 
@@ -16,94 +14,13 @@ logfire.configure(
 )
 logfire.instrument_pydantic_ai()
 
-# Research tool function
-async def research_topic(ctx: RunContext[Any], topic: str) -> str:
-    """
-    Research a topic using web search or knowledge retrieval.
-    
-    Args:
-        ctx: The run context from pydantic-ai
-        topic: The topic to research
-        
-    Returns:
-        Research findings as a string
-    """
-    with logfire.span('research_topic', topic=topic):
-        logfire.info('Starting research', topic=topic)
-        
-        try:
-            # Example using DuckDuckGo Instant Answer API (free, no API key needed)
-            async with httpx.AsyncClient(follow_redirects=False) as client:
-                response = await client.get(
-                    "https://api.duckduckgo.com/",
-                    params={
-                        "q": topic,
-                        "format": "json",
-                        "no_html": "1",
-                        "skip_disambig": "1",
-                        "no_redirect": "1"
-                    },
-                    headers={
-                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-                    },
-                    timeout=30.0
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    # print(data, "DAAATA")
-                    # Compile research results
-                    results = []
-                    
-                    if data.get("AbstractText"):
-                        results.append(f"Summary: {data['AbstractText']}")
-                    
-                    if data.get("Definition"):
-                        results.append(f"Definition: {data['Definition']}")
-                    
-                    if data.get("RelatedTopics"):
-                        related = [
-                            item.get("Text", "") 
-                            for item in data["RelatedTopics"][:5] 
-                            if isinstance(item, dict) and item.get("Text")
-                        ]
-                        if related:
-                            related_info = "Related Information:\n" + "\n- ".join([""] + related)
-                            results.append(related_info)
-                    
-                    if results:
-                        research_output = f"Research findings for '{topic}':\n\n" + "\n\n".join(results)
-                    else:
-                        research_output = f"Limited information found for '{topic}' via DuckDuckGo Instant Answer API. The API may not have detailed information on this topic. Try rephrasing or searching for more general/specific terms."
-                    
-                    logfire.info('Research completed', findings_length=len(research_output))
-                    return research_output
-                elif response.status_code == 301 or response.status_code == 302:
-                    error_msg = f"DuckDuckGo API returned redirect (status {response.status_code}). This usually means no instant answer is available for '{topic}'. Try a more general query or a well-known topic."
-                    logfire.warn('Research redirect', error=error_msg, redirect_location=response.headers.get('location'))
-                    return error_msg
-                else:
-                    error_msg = f"Research API returned status code: {response.status_code}. Response: {response.text[:200]}"
-                    logfire.error('Research failed', error=error_msg)
-                    return error_msg
-                    
-        except httpx.HTTPStatusError as e:
-            error_msg = f"HTTP error during research: {str(e)}"
-            logfire.error('Research HTTP exception', error=error_msg)
-            return error_msg
-        except Exception as e:
-            error_msg = f"Error during research: {str(e)}"
-            logfire.error('Research exception', error=error_msg)
-            return error_msg
-
 model = "gemini-2.5-flash"
 agent = Agent(
     model,
-    tools=[research_topic],
     system_prompt=(
-        "You are a helpful research assistant. When users ask you to research topics, "
-        "use the research_topic tool to gather information. Provide comprehensive, "
-        "well-structured answers based on the research findings."
+        "You are a helpful and friendly assistant. Engage in natural conversation "
+        "with users, answer their questions, and provide assistance on various topics. "
+        "Be conversational, helpful, and concise in your responses."
     )
 )
 
